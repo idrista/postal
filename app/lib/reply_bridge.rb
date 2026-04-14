@@ -72,8 +72,10 @@ class ReplyBridge
 
     def alias_for(server, email)
       email = Postal::Helpers.strip_name_from_address(email).to_s.downcase
-      ReplyBridgeAlias.create_or_find_by!(server: server, email: email)
-    rescue ActiveRecord::RecordNotUnique
+
+      ReplyBridgeAlias.find_by(server: server, email: email) ||
+        ReplyBridgeAlias.create!(server: server, email: email)
+    rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique
       ReplyBridgeAlias.find_by!(server: server, email: email)
     end
 

@@ -61,5 +61,20 @@ RSpec.describe ReplyBridge do
       expect(parsed.from).to eq ["reply@example.com"]
       expect(parsed.reply_to.first).to match(/\Areply\+[a-z0-9]+@reply\.example\.com\z/)
     end
+
+    it "reuses an existing alias for the reply sender" do
+      alias_record = described_class.alias_for(server, "prof@gmail.com")
+      reply_alias = described_class.alias_for(server, "student@example.net")
+      incoming = MessageFactory.incoming(server) do |message, mail|
+        message.rcpt_to = alias_record.address
+        message.reply_bridge_alias_id = alias_record.id
+        mail.from = "student@example.net"
+        mail.to = alias_record.address
+      end
+
+      expect { described_class.reemit_reply(incoming, alias_record) }
+        .not_to change { ReplyBridgeAlias.where(server: server, email: "student@example.net").count }
+      expect(ReplyBridgeAlias.find_by(server: server, email: "student@example.net")).to eq reply_alias
+    end
   end
 end
