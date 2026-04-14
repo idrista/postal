@@ -5,6 +5,7 @@
 = render 'settings_header', :active_nav => :reply_bridge
 
 .pageContent.pageContent--compact
+  - bridge_domains = @server.reply_bridge_available_domains.to_a
   %h2.pageContent__title Reply Bridge
   %p.pageContent__intro.u-margin
     Reply Bridge replaces external Reply-To addresses with controlled aliases and re-emits replies through Postal.
@@ -30,13 +31,20 @@
       .fieldSet__field
         = f.label :reply_bridge_domain, "Reply domain", :class => 'fieldSet__label'
         .fieldSet__input
-          = f.text_field :reply_bridge_domain, :class => 'input input--text', :placeholder => "reply.example.com"
-          %p.fieldSet__text Incoming replies must be routed to Postal with MX records for this domain.
+          = f.text_field :reply_bridge_domain, :class => 'input input--text', :placeholder => "reply.example.com", :list => "replyBridgeDomains"
+          %datalist#replyBridgeDomains
+            - bridge_domains.each do |domain|
+              %option{:value => domain.name}
+              %option{:value => "reply.#{domain.name}"}
+          %p.fieldSet__text Use a domain that is configured in Postal, or add and verify the reply subdomain before enabling Reply Bridge.
       .fieldSet__field
         = f.label :reply_bridge_sender, "Sender address", :class => 'fieldSet__label'
         .fieldSet__input
-          = f.text_field :reply_bridge_sender, :class => 'input input--text', :placeholder => "reply@example.com"
-          %p.fieldSet__text Postal uses this authenticated address when re-emitting replies.
+          = f.text_field :reply_bridge_sender, :class => 'input input--text', :placeholder => "reply@example.com", :list => "replyBridgeSenders"
+          %datalist#replyBridgeSenders
+            - bridge_domains.each do |domain|
+              %option{:value => "reply@#{domain.name}"}
+          %p.fieldSet__text Use an address on a verified Postal domain with valid SPF, DKIM and return-path records.
       .fieldSet__field
         = f.label :reply_bridge_alias_ttl_days, "Alias expiry", :class => 'fieldSet__label'
         .fieldSet__input
@@ -61,6 +69,10 @@
     %b= @server.reply_bridge_domain.presence || "your Reply Bridge domain"
     pointing to:
   %pre.codeBlock.u-margin= Postal::Config.dns.mx_records.join("\n")
+  %p.pageContent__text.u-margin
+    If you want to use a subdomain such as
+    %b reply.example.com
+    add it as a Postal domain first, verify it, then configure its SPF, DKIM, MX and return path records.
 
   %h3.pageContent__subTitle Sender
   - if @server.reply_bridge_sender_status == "OK"
@@ -73,7 +85,7 @@
       = @server.reply_bridge_sender_error
 
   %p.pageContent__text.u-margin
-    The sender address must belong to a verified Postal domain on this server or organization.
+    The sender address must use one of your verified Postal domains. Avoid sending from an unconfigured reply subdomain; providers such as Gmail may rate limit it because SPF, DKIM or return-path alignment is missing.
 
   .buttonSet.u-margin
     = link_to "Check Reply Bridge setup", [:check_reply_bridge, organization, @server], :remote => true, :method => :post, :class => 'button'

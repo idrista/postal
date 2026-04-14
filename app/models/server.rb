@@ -202,6 +202,23 @@ class Server < ApplicationRecord
     ReplyBridge.readiness_error(self).nil?
   end
 
+  def reply_bridge_available_domains
+    Domain.verified
+          .where("(owner_type = 'Organization' AND owner_id = ?) OR " \
+                 "(owner_type = 'Server' AND owner_id = ?)", organization_id, id)
+          .order(:name)
+  end
+
+  def reply_bridge_sender_domain
+    address = Postal::Helpers.strip_name_from_address(reply_bridge_sender)
+    return nil if address.blank?
+
+    _uname, domain_name = address.split("@", 2)
+    return nil if domain_name.blank?
+
+    reply_bridge_available_domains.find { |domain| domain.name == domain_name }
+  end
+
   def reply_bridge_status
     return "Not configured" unless reply_bridge_enabled?
     return "Ready" if reply_bridge_ready?
@@ -249,13 +266,27 @@ class Server < ApplicationRecord
       return false
     end
 
-    if authenticated_domain_for_address(reply_bridge_sender)
+    domain = reply_bridge_sender_domain
+    unless domain
+      self.reply_bridge_sender_status = "Invalid"
+      self.reply_bridge_sender_error = "The Reply Bridge sender must use one of the verified domains listed on this server or organization."
+      return false
+    end
+
+    domain.check_dns if domain.dns_checked_at.nil?
+
+    missing = []
+    missing << "SPF" unless domain.spf_status == "OK"
+    missing << "DKIM" unless domain.dkim_status == "OK"
+    missing << "return path" unless domain.return_path_status == "OK"
+
+    if missing.empty?
       self.reply_bridge_sender_status = "OK"
       self.reply_bridge_sender_error = nil
       true
     else
       self.reply_bridge_sender_status = "Invalid"
-      self.reply_bridge_sender_error = "The Reply Bridge sender must belong to a verified domain on this server or organization."
+      self.reply_bridge_sender_error = "The Reply Bridge sender domain #{domain.name} needs valid #{missing.to_sentence} records."
       false
     end
   end

@@ -64,7 +64,8 @@ class ReplyBridge
     def readiness_error(server)
       return "Reply Bridge domain is not configured." if server.reply_bridge_domain.blank?
       return "Reply Bridge sender is not configured." if server.reply_bridge_sender.blank?
-      return "Reply Bridge sender is not authenticated by a verified domain." if server.authenticated_domain_for_address(server.reply_bridge_sender).nil?
+      return "Reply Bridge sender must use an exact verified domain." if server.reply_bridge_sender_domain.nil?
+      return "Reply Bridge sender DNS is not ready." unless server.reply_bridge_sender_status == "OK"
       return "Reply Bridge MX records are not ready." unless server.reply_bridge_mx_status == "OK"
 
       nil
@@ -120,7 +121,7 @@ class ReplyBridge
       message.scope = "outgoing"
       message.rcpt_to = alias_record.email
       message.mail_from = Postal::Helpers.strip_name_from_address(alias_record.server.reply_bridge_sender)
-      message.domain_id = alias_record.server.authenticated_domain_for_address(alias_record.server.reply_bridge_sender)&.id
+      message.domain_id = alias_record.server.reply_bridge_sender_domain&.id
       message.raw_message = mail.to_s
       message.reply_bridge_requested = true
       message.reply_bridge_alias_id = reply_alias.id

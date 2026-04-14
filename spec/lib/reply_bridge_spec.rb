@@ -8,11 +8,12 @@ RSpec.describe ReplyBridge do
            reply_bridge_mode: "AutoExternal",
            reply_bridge_domain: "reply.example.com",
            reply_bridge_sender: "reply@example.com",
+           reply_bridge_sender_status: "OK",
            reply_bridge_mx_status: "OK")
   end
 
   before do
-    create(:domain, owner: server, name: "example.com", verified_at: Time.current)
+    create(:domain, :dns_all_ok, owner: server, name: "example.com", verified_at: Time.current)
   end
 
   describe ".prepare_outgoing" do

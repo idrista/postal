@@ -213,9 +213,10 @@ module MessageDequeuer
                reply_bridge_mode: "AutoExternal",
                reply_bridge_domain: "reply.example.com",
                reply_bridge_sender: "reply@example.com",
+               reply_bridge_sender_status: "OK",
                reply_bridge_mx_status: "OK")
       end
-      let!(:domain) { create(:domain, owner: server, name: "example.com", verified_at: Time.current) }
+      let!(:domain) { create(:domain, :dns_all_ok, owner: server, name: "example.com", verified_at: Time.current) }
       let(:alias_record) { ReplyBridge.alias_for(server, "prof@gmail.com") }
       let(:message) do
         MessageFactory.incoming(server) do |msg, mail|
