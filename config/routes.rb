@@ -54,6 +54,9 @@ Rails.application.routes.draw do
       end
       get :limits, on: :member
       get :retention, on: :member
+      get :reply_bridge, on: :member
+      post :check_reply_bridge, on: :member
+      post :test_reply_bridge, on: :member
       get :queue, on: :member
       get :spam, on: :member
       get :delete, on: :member

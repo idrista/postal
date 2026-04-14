@@ -93,10 +93,49 @@ class ServersController < ApplicationController
     redirect_to_with_json [organization, @server], notice: "Server has been unsuspended"
   end
 
+  def reply_bridge
+  end
+
+  def check_reply_bridge
+    if @server.check_reply_bridge
+      redirect_to_with_json [:reply_bridge, organization, @server], notice: "Reply Bridge is ready."
+    else
+      redirect_to_with_json [:reply_bridge, organization, @server], alert: "Reply Bridge is not ready yet. Check the details below."
+    end
+  end
+
+  def test_reply_bridge
+    unless @server.reply_bridge_ready?
+      redirect_to_with_json [:reply_bridge, organization, @server], alert: "Reply Bridge must be ready before sending a test."
+      return
+    end
+
+    alias_record = ReplyBridge.alias_for(@server, current_user.email_address)
+    mail = Mail.new
+    mail.from = "reply-bridge-test@example.net"
+    mail.to = alias_record.address
+    mail.subject = "Reply Bridge test"
+    mail.body = "This is an automated Reply Bridge test."
+
+    message = @server.message_db.new_message
+    message.scope = "incoming"
+    message.rcpt_to = alias_record.address
+    message.mail_from = "reply-bridge-test@example.net"
+    message.raw_message = mail.to_s
+    message.received_with_ssl = true
+    message.reply_bridge_requested = true
+    message.reply_bridge_alias_id = alias_record.id
+    message.save
+
+    logger = Postal.logger.create_tagged_logger(reply_bridge_test: @server.id)
+    MessageDequeuer::IncomingMessageProcessor.process(message.queued_message, logger: logger, state: MessageDequeuer::State.new)
+    redirect_to_with_json [:reply_bridge, organization, @server], notice: "Reply Bridge test created an outgoing message for #{current_user.email_address}."
+  end
+
   private
 
   def safe_params(*extras)
-    params.require(:server).permit(:name, :mode, :ip_pool_id, *extras)
+    params.require(:server).permit(:name, :mode, :ip_pool_id, :reply_bridge_mode, :reply_bridge_domain, :reply_bridge_sender, :reply_bridge_alias_ttl_days, *extras)
   end
 
 end

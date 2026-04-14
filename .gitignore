@@ -33,4 +33,4 @@ BRANCH
 
 .rubocop-https*
 .env*
-
+/.idea

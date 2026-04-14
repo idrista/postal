@@ -18,6 +18,15 @@
 #  privacy_mode                       :boolean          default(FALSE)
 #  raw_message_retention_days         :integer
 #  raw_message_retention_size         :integer
+#  reply_bridge_alias_ttl_days        :integer          default(365)
+#  reply_bridge_checked_at            :datetime
+#  reply_bridge_domain                :string(255)
+#  reply_bridge_mode                  :string(255)      default("Off")
+#  reply_bridge_mx_error              :string(255)
+#  reply_bridge_mx_status             :string(255)
+#  reply_bridge_sender                :string(255)
+#  reply_bridge_sender_error          :string(255)
+#  reply_bridge_sender_status         :string(255)
 #  send_limit                         :integer
 #  send_limit_approaching_at          :datetime
 #  send_limit_approaching_notified_at :datetime
@@ -46,6 +55,7 @@ class Server < ApplicationRecord
 
   RESERVED_PERMALINKS = %w[new all search stats edit manage delete destroy remove].freeze
   MODES = %w[Live Development].freeze
+  REPLY_BRIDGE_MODES = %w[Off ExplicitOnly AutoExternal].freeze
 
   include HasUUID
   include HasSoftDestroy
@@ -65,17 +75,23 @@ class Server < ApplicationRecord
   has_many :webhook_requests, dependent: :destroy
   has_many :track_domains, dependent: :destroy
   has_many :ip_pool_rules, dependent: :destroy, as: :owner
+  has_many :reply_bridge_aliases, dependent: :destroy
 
   random_string :token, type: :chars, length: 6, unique: true, upper_letters_only: true
   default_value :permalink, -> { name ? name.parameterize : nil }
   default_value :raw_message_retention_days, -> { 30 }
   default_value :raw_message_retention_size, -> { 2048 }
   default_value :message_retention_days, -> { 60 }
+  default_value :reply_bridge_alias_ttl_days, -> { 365 }
   default_value :spam_threshold, -> { Postal::Config.postal.default_spam_threshold }
   default_value :spam_failure_threshold, -> { Postal::Config.postal.default_spam_failure_threshold }
 
   validates :name, presence: true, uniqueness: { scope: :organization_id, case_sensitive: false }
   validates :mode, inclusion: { in: MODES }
+  validates :reply_bridge_mode, inclusion: { in: REPLY_BRIDGE_MODES }
+  validates :reply_bridge_domain, allow_blank: true, format: { with: /\A[a-z0-9\-.]*\z/ }
+  validates :reply_bridge_sender, allow_blank: true, format: { with: /@/ }
+  validates :reply_bridge_alias_ttl_days, numericality: { greater_than: 0, only_integer: true }
   validates :permalink, presence: true, uniqueness: { scope: :organization_id, case_sensitive: false }, format: { with: /\A[a-z0-9-]*\z/ }, exclusion: { in: RESERVED_PERMALINKS }
   validate :validate_ip_pool_belongs_to_organization
 
@@ -176,6 +192,72 @@ class Server < ApplicationRecord
       bad_dns += 1 if domain.verified? && !domain.dns_ok?
     end
     [total, unverified, bad_dns]
+  end
+
+  def reply_bridge_enabled?
+    reply_bridge_mode != "Off"
+  end
+
+  def reply_bridge_ready?
+    ReplyBridge.readiness_error(self).nil?
+  end
+
+  def reply_bridge_status
+    return "Not configured" unless reply_bridge_enabled?
+    return "Ready" if reply_bridge_ready?
+    return "Not configured" if reply_bridge_domain.blank? && reply_bridge_sender.blank?
+
+    "Partial"
+  end
+
+  def check_reply_bridge
+    check_reply_bridge_mx
+    check_reply_bridge_sender
+    self.reply_bridge_checked_at = Time.current
+    save!
+    reply_bridge_ready?
+  end
+
+  def check_reply_bridge_mx
+    if reply_bridge_domain.blank?
+      self.reply_bridge_mx_status = "Missing"
+      self.reply_bridge_mx_error = "No Reply Bridge domain has been configured."
+      return false
+    end
+
+    records = DNSResolver.local.mx(reply_bridge_domain).map(&:last)
+    missing_records = Postal::Config.dns.mx_records.dup - records.map { |r| r.to_s.downcase }
+    if missing_records.empty?
+      self.reply_bridge_mx_status = "OK"
+      self.reply_bridge_mx_error = nil
+      true
+    elsif records.empty?
+      self.reply_bridge_mx_status = "Missing"
+      self.reply_bridge_mx_error = "There are no MX records for #{reply_bridge_domain}."
+      false
+    else
+      self.reply_bridge_mx_status = "Invalid"
+      self.reply_bridge_mx_error = "MX #{missing_records.size == 1 ? 'record' : 'records'} for #{missing_records.to_sentence} are missing and are required."
+      false
+    end
+  end
+
+  def check_reply_bridge_sender
+    if reply_bridge_sender.blank?
+      self.reply_bridge_sender_status = "Missing"
+      self.reply_bridge_sender_error = "No Reply Bridge sender has been configured."
+      return false
+    end
+
+    if authenticated_domain_for_address(reply_bridge_sender)
+      self.reply_bridge_sender_status = "OK"
+      self.reply_bridge_sender_error = nil
+      true
+    else
+      self.reply_bridge_sender_status = "Invalid"
+      self.reply_bridge_sender_error = "The Reply Bridge sender must belong to a verified domain on this server or organization."
+      false
+    end
   end
 
   def webhook_hash

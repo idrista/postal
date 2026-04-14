@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2024_03_11_205229) do
+ActiveRecord::Schema[7.0].define(version: 2026_04_13_120000) do
   create_table "additional_route_endpoints", id: :integer, charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
     t.integer "route_id"
     t.string "endpoint_type"
@@ -216,6 +216,19 @@ ActiveRecord::Schema[7.0].define(version: 2024_03_11_205229) do
     t.index ["token"], name: "index_routes_on_token", length: 6
   end
 
+  create_table "reply_bridge_aliases", id: :integer, charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+    t.integer "server_id"
+    t.string "email"
+    t.string "token"
+    t.datetime "last_used_at", precision: nil
+    t.datetime "expires_at", precision: nil
+    t.datetime "created_at", precision: nil, null: false
+    t.datetime "updated_at", precision: nil, null: false
+    t.index ["server_id", "email"], name: "index_reply_bridge_aliases_on_server_id_and_email", unique: true
+    t.index ["server_id"], name: "index_reply_bridge_aliases_on_server_id"
+    t.index ["token"], name: "index_reply_bridge_aliases_on_token", unique: true
+  end
+
   create_table "scheduled_tasks", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
     t.string "name"
     t.datetime "next_run_after", precision: nil
@@ -251,6 +264,15 @@ ActiveRecord::Schema[7.0].define(version: 2024_03_11_205229) do
     t.string "suspension_reason"
     t.boolean "log_smtp_data", default: false
     t.boolean "privacy_mode", default: false
+    t.string "reply_bridge_mode", default: "Off"
+    t.string "reply_bridge_domain"
+    t.string "reply_bridge_sender"
+    t.integer "reply_bridge_alias_ttl_days", default: 365
+    t.datetime "reply_bridge_checked_at", precision: nil
+    t.string "reply_bridge_mx_status"
+    t.string "reply_bridge_mx_error"
+    t.string "reply_bridge_sender_status"
+    t.string "reply_bridge_sender_error"
     t.index ["organization_id"], name: "index_servers_on_organization_id"
     t.index ["permalink"], name: "index_servers_on_permalink", length: 6
     t.index ["token"], name: "index_servers_on_token", length: 6

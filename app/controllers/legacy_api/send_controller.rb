@@ -48,6 +48,7 @@ module LegacyAPI
       attributes[:plain_body] = api_params["plain_body"]
       attributes[:html_body] = api_params["html_body"]
       attributes[:bounce] = api_params["bounce"] ? true : false
+      attributes[:reply_bridge] = api_params["reply_bridge"] ? true : false
       attributes[:tag] = api_params["tag"]
       attributes[:custom_headers] = api_params["headers"] if api_params["headers"]
       attributes[:attachments] = []
@@ -113,16 +114,20 @@ module LegacyAPI
       # Store the result ready to return
       result = { message_id: nil, messages: {} }
       if api_params["rcpt_to"].is_a?(Array)
+        bridge_result = ReplyBridge.prepare_outgoing(@current_credential.server, raw_message, explicit: api_params["reply_bridge"] ? true : false)
         api_params["rcpt_to"].uniq.each do |rcpt_to|
           message = @current_credential.server.message_db.new_message
           message.rcpt_to = rcpt_to
           message.mail_from = api_params["mail_from"]
-          message.raw_message = raw_message
+          message.raw_message = bridge_result.raw_message
           message.received_with_ssl = true
           message.scope = "outgoing"
           message.domain_id = authenticated_domain.id
           message.credential_id = @current_credential.id
           message.bounce = api_params["bounce"] ? true : false
+          message.reply_bridge_requested = bridge_result.required?
+          message.reply_bridge_alias_id = bridge_result.bridge_alias&.id
+          message.reply_bridge_error = bridge_result.error
           message.save
           result[:message_id] = message.message_id if result[:message_id].nil?
           result[:messages][rcpt_to] = { id: message.id, token: message.token }

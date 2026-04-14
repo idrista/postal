@@ -18,6 +18,7 @@ class OutgoingMessagePrototype
   attr_accessor :tag
   attr_accessor :credential
   attr_accessor :bounce
+  attr_accessor :reply_bridge
 
   def initialize(server, ip, source_type, attributes)
     @server = server
@@ -183,17 +184,24 @@ class OutgoingMessagePrototype
     end
   end
 
+  def reply_bridge_result
+    @reply_bridge_result ||= ReplyBridge.prepare_outgoing(@server, raw_message, explicit: ActiveModel::Type::Boolean.new.cast(@reply_bridge))
+  end
+
   def create_message(address)
     message = @server.message_db.new_message
     message.scope = "outgoing"
     message.rcpt_to = address
     message.mail_from = from_address
     message.domain_id = domain.id
-    message.raw_message = raw_message
+    message.raw_message = reply_bridge_result.raw_message
     message.tag = tag
     message.credential_id = credential&.id
     message.received_with_ssl = true
     message.bounce = @bounce
+    message.reply_bridge_requested = reply_bridge_result.required?
+    message.reply_bridge_alias_id = reply_bridge_result.bridge_alias&.id
+    message.reply_bridge_error = reply_bridge_result.error
     message.save
     { id: message.id, token: message.token }
   end

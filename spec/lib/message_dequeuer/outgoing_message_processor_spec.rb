@@ -122,6 +122,31 @@ module MessageDequeuer
       end
     end
 
+    context "when Reply Bridge is required but not ready" do
+      let(:message) do
+        MessageFactory.outgoing(server, domain: domain, credential: credential) do |msg|
+          msg.reply_bridge_requested = true
+          msg.reply_bridge_error = "Reply Bridge MX records are not ready."
+        end
+      end
+
+      it "logs" do
+        processor.process
+        expect(logger).to have_logged(/reply bridge is required but not ready/)
+      end
+
+      it "sets the message status to Held" do
+        processor.process
+        expect(message.reload.status).to eq "Held"
+      end
+
+      it "creates a Held delivery" do
+        processor.process
+        delivery = message.deliveries.last
+        expect(delivery).to have_attributes(status: "Held", details: /Reply Bridge is required/)
+      end
+    end
+
     context "when the rcpt address is on the suppression list" do
       before do
         server.message_db.suppression_list.add(:recipient, message.rcpt_to, reason: "testing")

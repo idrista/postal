@@ -206,6 +206,67 @@ module MessageDequeuer
       end
     end
 
+    context "when the message is for Reply Bridge" do
+      let(:route) { nil }
+      let(:server) do
+        create(:server,
+               reply_bridge_mode: "AutoExternal",
+               reply_bridge_domain: "reply.example.com",
+               reply_bridge_sender: "reply@example.com",
+               reply_bridge_mx_status: "OK")
+      end
+      let!(:domain) { create(:domain, owner: server, name: "example.com", verified_at: Time.current) }
+      let(:alias_record) { ReplyBridge.alias_for(server, "prof@gmail.com") }
+      let(:message) do
+        MessageFactory.incoming(server) do |msg, mail|
+          msg.reply_bridge_requested = true
+          msg.reply_bridge_alias_id = alias_record.id
+          msg.rcpt_to = alias_record.address
+          mail.from = "student@example.net"
+          mail.to = alias_record.address
+        end
+      end
+
+      it "re-emits the reply as an outgoing message" do
+        processor.process
+        outgoing = server.message_db.messages(where: { scope: "outgoing" }).last
+
+        expect(outgoing.rcpt_to).to eq "prof@gmail.com"
+        expect(outgoing.reply_bridge_source_message_id).to eq message.id
+      end
+
+      it "sets the incoming message status to Processed" do
+        processor.process
+        expect(message.reload.status).to eq "Processed"
+      end
+
+      it "creates a Processed delivery" do
+        processor.process
+        delivery = message.deliveries.last
+        expect(delivery).to have_attributes(status: "Processed", details: /Reply Bridge re-emitted/)
+      end
+    end
+
+    context "when Reply Bridge detects an auto-response" do
+      let(:route) { nil }
+      let(:server) { create(:server, reply_bridge_mode: "AutoExternal", reply_bridge_domain: "reply.example.com") }
+      let(:alias_record) { create(:reply_bridge_alias, server: server, email: "prof@gmail.com") }
+      let(:message) do
+        MessageFactory.incoming(server) do |msg, mail|
+          msg.reply_bridge_requested = true
+          msg.reply_bridge_alias_id = alias_record.id
+          mail["Auto-Submitted"] = "auto-replied"
+        end
+      end
+
+      it "processes without re-emitting" do
+        processor.process
+
+        expect(message.reload.status).to eq "Processed"
+        expect(server.message_db.messages(where: { scope: "outgoing" })).to be_empty
+      end
+    end
+
     context "when the route's spam mode is Quarantine, the message is spam and not manually queued" do
       let(:route) { create(:route, server: server, spam_mode: "Quarantine") }
 

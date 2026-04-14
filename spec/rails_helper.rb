@@ -12,6 +12,7 @@ require "factory_bot"
 require "timecop"
 require "webmock/rspec"
 require "shoulda-matchers"
+require "database_cleaner/active_record"
 
 DatabaseCleaner.allow_remote_database_url = true
 ActiveRecord::Base.logger = Logger.new("/dev/null")

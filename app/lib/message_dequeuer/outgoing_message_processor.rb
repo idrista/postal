@@ -9,6 +9,7 @@ module MessageDequeuer
         check_rcpt_to
         add_tag
         hold_if_credential_is_set_to_hold
+        hold_if_reply_bridge_is_not_ready
         hold_if_recipient_on_suppression_list
         parse_content
         inspect_message
@@ -62,6 +63,16 @@ module MessageDequeuer
 
       log "credential wants us to hold messages, holding"
       create_delivery "Held", details: "Credential is configured to hold all messages authenticated by it."
+      remove_from_queue
+      stop_processing
+    end
+
+    def hold_if_reply_bridge_is_not_ready
+      return if queued_message.manual?
+      return if queued_message.message.reply_bridge_error.blank?
+
+      log "reply bridge is required but not ready, holding"
+      create_delivery "Held", details: "Reply Bridge is required for this message but cannot be used: #{queued_message.message.reply_bridge_error}"
       remove_from_queue
       stop_processing
     end

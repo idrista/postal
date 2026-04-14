@@ -1,0 +1,83 @@
+- page_title << @server.name
+- page_title << "Reply Bridge"
+= render 'sidebar', :active_server => @server
+= render 'header', :active_nav => :settings
+= render 'settings_header', :active_nav => :reply_bridge
+
+.pageContent.pageContent--compact
+  %h2.pageContent__title Reply Bridge
+  %p.pageContent__intro.u-margin
+    Reply Bridge replaces external Reply-To addresses with controlled aliases and re-emits replies through Postal.
+
+  %p.pageContent__text.u-margin
+    Current status:
+    - case @server.reply_bridge_status
+    - when "Ready"
+      %span.label.label--green Ready
+    - when "Partial"
+      %span.label.label--orange Partial
+    - else
+      %span.label.label--grey Not configured
+
+  = form_for [organization, @server], :remote => true do |f|
+    = f.error_messages
+    %fieldset.fieldSet.fieldSet--wide
+      .fieldSet__field
+        = f.label :reply_bridge_mode, "Mode", :class => 'fieldSet__label'
+        .fieldSet__input
+          = f.select :reply_bridge_mode, [["Off", "Off"], ["Explicit only", "ExplicitOnly"], ["Auto reply if external", "AutoExternal"]], {}, :class => 'input input--select'
+          %p.fieldSet__text Auto reply if external bridges API messages when Reply-To is outside your authenticated domains.
+      .fieldSet__field
+        = f.label :reply_bridge_domain, "Reply domain", :class => 'fieldSet__label'
+        .fieldSet__input
+          = f.text_field :reply_bridge_domain, :class => 'input input--text', :placeholder => "reply.example.com"
+          %p.fieldSet__text Incoming replies must be routed to Postal with MX records for this domain.
+      .fieldSet__field
+        = f.label :reply_bridge_sender, "Sender address", :class => 'fieldSet__label'
+        .fieldSet__input
+          = f.text_field :reply_bridge_sender, :class => 'input input--text', :placeholder => "reply@example.com"
+          %p.fieldSet__text Postal uses this authenticated address when re-emitting replies.
+      .fieldSet__field
+        = f.label :reply_bridge_alias_ttl_days, "Alias expiry", :class => 'fieldSet__label'
+        .fieldSet__input
+          = f.text_field :reply_bridge_alias_ttl_days, :class => 'input input--text'
+          %p.fieldSet__text Number of days to keep aliases active after use.
+
+    .fieldSetSubmit.fieldSetSubmit--wide.buttonSet
+      = f.submit "Save Reply Bridge", :class => 'button button--positive js-form-submit'
+
+  %h3.pageContent__subTitle DNS Configuration
+  - if @server.reply_bridge_mx_status == "OK"
+    %p.pageContent__text.u-green.u-bold
+      %span.label.label--green Good
+      MX records are configured.
+  - elsif @server.reply_bridge_mx_status.present?
+    %p.pageContent__text.u-orange.u-bold
+      %span.label.label--orange Warning
+      = @server.reply_bridge_mx_error
+
+  %p.pageContent__text
+    Add MX records for
+    %b= @server.reply_bridge_domain.presence || "your Reply Bridge domain"
+    pointing to:
+  %pre.codeBlock.u-margin= Postal::Config.dns.mx_records.join("\n")
+
+  %h3.pageContent__subTitle Sender
+  - if @server.reply_bridge_sender_status == "OK"
+    %p.pageContent__text.u-green.u-bold
+      %span.label.label--green Good
+      Sender is authenticated.
+  - elsif @server.reply_bridge_sender_status.present?
+    %p.pageContent__text.u-orange.u-bold
+      %span.label.label--orange Warning
+      = @server.reply_bridge_sender_error
+
+  %p.pageContent__text.u-margin
+    The sender address must belong to a verified Postal domain on this server or organization.
+
+  .buttonSet.u-margin
+    = link_to "Check Reply Bridge setup", [:check_reply_bridge, organization, @server], :remote => true, :method => :post, :class => 'button'
+    = link_to "Send test reply bridge email", [:test_reply_bridge, organization, @server], :remote => true, :method => :post, :class => 'button button--positive'
+
+  - if @server.reply_bridge_checked_at
+    %p.pageContent__text We last checked Reply Bridge #{distance_of_time_in_words_to_now @server.reply_bridge_checked_at} ago.

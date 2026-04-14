@@ -14,6 +14,7 @@ module MessageDequeuer
         inspect_message
         fail_if_spam
         hold_if_server_development_mode
+        process_reply_bridge
         find_route
         hold_or_reject_spam
         accept_mail_without_endpoints
@@ -96,6 +97,38 @@ module MessageDequeuer
 
       log "no route and/or endpoint available for processing, hard failing"
       create_delivery "HardFail", details: "Message does not have a route and/or endpoint available for delivery."
+      remove_from_queue
+      stop_processing
+    end
+
+    def process_reply_bridge
+      return unless queued_message.message.reply_bridge_alias_id
+
+      alias_record = ReplyBridgeAlias.find_by_id(queued_message.message.reply_bridge_alias_id)
+      unless alias_record
+        log "reply bridge alias was not found, hard failing"
+        create_delivery "HardFail", details: "Reply Bridge alias no longer exists."
+        remove_from_queue
+        stop_processing
+      end
+
+      if ReplyBridge.auto_response?(queued_message.message)
+        log "reply bridge auto-response detected, processing without re-emission"
+        create_delivery "Processed", details: "Reply Bridge detected an automatic response and did not re-emit it."
+        remove_from_queue
+        stop_processing
+      end
+
+      if ReplyBridge.loop_detected?(queued_message.message)
+        log "reply bridge loop detected, processing without re-emission"
+        create_delivery "Processed", details: "Reply Bridge loop protection stopped this message from being re-emitted."
+        remove_from_queue
+        stop_processing
+      end
+
+      outgoing = ReplyBridge.reemit_reply(queued_message.message, alias_record)
+      log "reply bridge re-emitted message #{outgoing.id}"
+      create_delivery "Processed", details: "Reply Bridge re-emitted this reply as outgoing message <msg:#{outgoing.id}>."
       remove_from_queue
       stop_processing
     end

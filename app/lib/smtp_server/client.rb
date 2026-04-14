@@ -361,6 +361,18 @@ module SMTPServer
           "550 Invalid route token"
         end
 
+      elsif (reply_bridge_alias = ReplyBridge.alias_from_address(rcpt_to))
+        # This is an incoming reply for Reply Bridge.
+        @state = :rcpt_to_received
+        if reply_bridge_alias.server.suspended?
+          increment_error_count("server-suspended")
+          "535 Mail server has been suspended"
+        else
+          logger&.debug "Added reply bridge alias #{reply_bridge_alias.id}"
+          @recipients << [:reply_bridge, rcpt_to, reply_bridge_alias.server, { reply_bridge_alias: reply_bridge_alias }]
+          "250 OK"
+        end
+
       elsif @credential
         # This is outgoing mail for an authenticated user
         @state = :rcpt_to_received
@@ -536,6 +548,17 @@ module SMTPServer
             msg.raw_message = @data
             msg.received_with_ssl = @tls
           end
+        when :reply_bridge
+          increment_message_count("incoming")
+          message = server.message_db.new_message
+          message.rcpt_to = rcpt_to
+          message.mail_from = @mail_from
+          message.raw_message = @data
+          message.received_with_ssl = @tls
+          message.scope = "incoming"
+          message.reply_bridge_requested = true
+          message.reply_bridge_alias_id = options[:reply_bridge_alias].id
+          message.save
         end
       end
       transaction_reset

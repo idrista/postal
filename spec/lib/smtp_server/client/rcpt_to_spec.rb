@@ -123,6 +123,24 @@ module SMTPServer
         end
       end
 
+      context "when the RCPT TO address is a Reply Bridge alias" do
+        it "adds a reply bridge recipient if all OK" do
+          server = create(:server, reply_bridge_mode: "AutoExternal", reply_bridge_domain: "reply.example.com")
+          alias_record = create(:reply_bridge_alias, server: server, email: "prof@gmail.com")
+          address = alias_record.address
+
+          expect(client.handle("RCPT TO: #{address}")).to eq "250 OK"
+          expect(client.recipients).to eq [[:reply_bridge, address, server, { reply_bridge_alias: alias_record }]]
+          expect(client.state).to eq :rcpt_to_received
+        end
+
+        it "requires a valid token" do
+          create(:server, reply_bridge_mode: "AutoExternal", reply_bridge_domain: "reply.example.com")
+
+          expect(client.handle("RCPT TO: reply+missing@reply.example.com")).to eq "530 Authentication required"
+        end
+      end
+
       context "when not authenticated and the RCPT TO address is a route" do
         it "returns an error if the server is suspended" do
           server = create(:server, :suspended)
