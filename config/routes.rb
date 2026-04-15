@@ -52,6 +52,9 @@ Rails.application.routes.draw do
         get :history, on: :collection
         get "history/:uuid", on: :collection, action: "history_request", as: "history_request"
       end
+      resources :reply_bridge_aliases, only: [:index, :destroy] do
+        delete :clear_all, on: :collection
+      end
       get :limits, on: :member
       get :retention, on: :member
       get :reply_bridge, on: :member

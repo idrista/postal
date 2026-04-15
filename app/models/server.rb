@@ -99,6 +99,8 @@ class Server < ApplicationRecord
     self.token = token.downcase if token
   end
 
+  before_save :reset_reply_bridge_check_statuses
+
   after_create do
     unless provision_database == false
       message_db.provisioner.provision
@@ -217,6 +219,21 @@ class Server < ApplicationRecord
     return nil if domain_name.blank?
 
     reply_bridge_available_domains.find { |domain| domain.name == domain_name }
+  end
+
+  def reply_bridge_sender_local_part
+    address = Postal::Helpers.strip_name_from_address(reply_bridge_sender)
+    return nil if address.blank?
+
+    address.split("@", 2).first
+  end
+
+  def reply_bridge_sender_domain_name
+    address = Postal::Helpers.strip_name_from_address(reply_bridge_sender)
+    return nil if address.blank?
+
+    _uname, domain_name = address.split("@", 2)
+    domain_name
   end
 
   def reply_bridge_status
@@ -416,6 +433,22 @@ class Server < ApplicationRecord
     return unless ip_pool && ip_pool_id_changed? && !organization.ip_pools.include?(ip_pool)
 
     errors.add :ip_pool_id, "must belong to the organization"
+  end
+
+  def reset_reply_bridge_check_statuses
+    return unless persisted?
+
+    if reply_bridge_domain_changed?
+      self.reply_bridge_mx_status = nil
+      self.reply_bridge_mx_error = nil
+    end
+
+    if reply_bridge_sender_changed?
+      self.reply_bridge_sender_status = nil
+      self.reply_bridge_sender_error = nil
+    end
+
+    self.reply_bridge_checked_at = nil if reply_bridge_domain_changed? || reply_bridge_sender_changed?
   end
 
   class << self

@@ -17,7 +17,12 @@
       %dl
         %dt To
         %dd
-          - if @message.rcpt_to_return_path?
+          - if @message.reply_bridge? && @message.scope == "incoming"
+            = link_to @message.reply_bridge_alias&.email || @message.rcpt_to || "[blank]", send("#{@message.scope}_organization_server_messages_path", organization, @server, :query => "to: #{@message.rcpt_to}"), :class => 'u-link'
+            - if @message.reply_bridge_alias
+              %br
+              %span.u-grey Alias: #{@message.reply_bridge_alias.address}
+          - elsif @message.rcpt_to_return_path?
             %span.returnPathTag.returnPathTag--inMessageHeader= link_to "Return Path", send("#{@message.scope}_organization_server_messages_path", organization, @server, :query => "to: #{@message.rcpt_to}"), :class => 'u-link'
           - else
             = link_to @message.rcpt_to || "[blank]", send("#{@message.scope}_organization_server_messages_path", organization, @server, :query => "to: #{@message.rcpt_to}"), :class => 'u-link'

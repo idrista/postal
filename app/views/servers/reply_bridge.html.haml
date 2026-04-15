@@ -6,6 +6,8 @@
 
 .pageContent.pageContent--compact
   - bridge_domains = @server.reply_bridge_available_domains.to_a
+  - bridge_domain_options = bridge_domains.map { |domain| [domain.name, domain.name] }
+  - sender_domain = @server.reply_bridge_sender_domain_name
   %h2.pageContent__title Reply Bridge
   %p.pageContent__intro.u-margin
     Reply Bridge replaces external Reply-To addresses with controlled aliases and re-emits replies through Postal.
@@ -31,19 +33,15 @@
       .fieldSet__field
         = f.label :reply_bridge_domain, "Reply domain", :class => 'fieldSet__label'
         .fieldSet__input
-          = f.text_field :reply_bridge_domain, :class => 'input input--text', :placeholder => "reply.example.com", :list => "replyBridgeDomains"
-          %datalist#replyBridgeDomains
-            - bridge_domains.each do |domain|
-              %option{:value => domain.name}
-              %option{:value => "reply.#{domain.name}"}
-          %p.fieldSet__text Use a domain that is configured in Postal, or add and verify the reply subdomain before enabling Reply Bridge.
+          = f.select :reply_bridge_domain, options_for_select(bridge_domain_options, @server.reply_bridge_domain), { :include_blank => "Choose a verified domain..." }, :class => 'input input--select'
+          %p.fieldSet__text Choose the verified Postal domain that receives Reply Bridge aliases. Add and verify a reply subdomain first if you want to use one.
       .fieldSet__field
         = f.label :reply_bridge_sender, "Sender address", :class => 'fieldSet__label'
         .fieldSet__input
-          = f.text_field :reply_bridge_sender, :class => 'input input--text', :placeholder => "reply@example.com", :list => "replyBridgeSenders"
-          %datalist#replyBridgeSenders
-            - bridge_domains.each do |domain|
-              %option{:value => "reply@#{domain.name}"}
+          .routeNameInput
+            = text_field_tag "server[reply_bridge_sender_local_part]", @server.reply_bridge_sender_local_part, :class => 'input input--text routeNameInput__name', :placeholder => "reply"
+            %span.routeNameInput__at @
+            = select_tag "server[reply_bridge_sender_domain]", options_for_select(bridge_domain_options, sender_domain), :include_blank => "Choose a verified domain...", :class => 'input input--select routeNameInput__domain'
           %p.fieldSet__text Use an address on a verified Postal domain with valid SPF, DKIM and return-path records.
       .fieldSet__field
         = f.label :reply_bridge_alias_ttl_days, "Alias expiry", :class => 'fieldSet__label'
@@ -90,6 +88,7 @@
   .buttonSet.u-margin
     = link_to "Check Reply Bridge setup", [:check_reply_bridge, organization, @server], :remote => true, :method => :post, :class => 'button'
     = link_to "Send test reply bridge email", [:test_reply_bridge, organization, @server], :remote => true, :method => :post, :class => 'button button--positive'
+    = link_to "View Reply Bridge aliases", [organization, @server, :reply_bridge_aliases], :class => 'button button--neutral'
 
   - if @server.reply_bridge_checked_at
     %p.pageContent__text We last checked Reply Bridge #{distance_of_time_in_words_to_now @server.reply_bridge_checked_at} ago.

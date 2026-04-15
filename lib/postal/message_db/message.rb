@@ -65,6 +65,20 @@ module Postal
       end
 
       #
+      # Return the Reply Bridge alias for this message
+      #
+      def reply_bridge_alias
+        @reply_bridge_alias ||= reply_bridge_alias_id ? ReplyBridgeAlias.find_by_id(reply_bridge_alias_id) : nil
+      end
+
+      #
+      # Is this message part of Reply Bridge?
+      #
+      def reply_bridge?
+        reply_bridge_requested || reply_bridge_alias_id.present?
+      end
+
+      #
       # Return the endpoint for this message
       #
       def endpoint

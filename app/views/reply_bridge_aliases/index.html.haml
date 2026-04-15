@@ -1,0 +1,53 @@
+- page_title << @server.name
+- page_title << "Reply Bridge Aliases"
+= render 'servers/sidebar', :active_server => @server
+= render 'servers/header', :active_nav => :settings
+= render 'servers/settings_header', :active_nav => :reply_bridge
+
+.pageContent
+  %h2.pageContent__title Reply Bridge aliases
+  %p.pageContent__intro.u-margin
+    Reply Bridge aliases map external addresses to controlled reply addresses on this server.
+
+  = form_tag [organization, @server, :reply_bridge_aliases], :method => :get, :class => 'messageSearch', :enforce_utf8 => false do
+    %p
+      = text_field_tag 'query', @query, :class => 'messageSearch__input js-focus-on-f', :placeholder => "Search original email or alias..."
+      = submit_tag "Search", :class => 'button'
+
+  - if @aliases.empty?
+    .noData.noData--clean
+      %h2.noData__title No Reply Bridge aliases found.
+      %p.noData__text
+        Aliases are created automatically when Reply Bridge replaces an external Reply-To address.
+  - else
+    .buttonSet.u-margin
+      = link_to "Back to Reply Bridge settings", [:reply_bridge, organization, @server], :class => 'button button--neutral'
+      = link_to "Clear all aliases", [:clear_all, organization, @server, :reply_bridge_aliases], :remote => true, :method => :delete, :class => 'button button--danger', :data => {:confirm => "Delete all Reply Bridge aliases for this server?"}
+
+    %table.dataTable.u-margin
+      %thead
+        %tr
+          %td Original email
+          %td Alias
+          %td Last used
+          %td Expires
+          %td.dataTable__rightCell Actions
+      %tbody
+        - @aliases.each do |reply_alias|
+          %tr
+            %td= reply_alias.email
+            %td= reply_alias.address
+            %td
+              - if reply_alias.last_used_at
+                = reply_alias.last_used_at.to_fs(:long)
+              - else
+                Not used yet
+            %td
+              - if reply_alias.expires_at
+                = reply_alias.expires_at.to_fs(:long)
+              - else
+                No expiry
+            %td.dataTable__rightCell
+              = link_to "Delete", [organization, @server, reply_alias], :remote => true, :method => :delete, :class => 'button button--danger', :data => {:confirm => "Delete this Reply Bridge alias?"}
+
+    = paginate @aliases

@@ -30,7 +30,9 @@
           %dl.messagePropertiesPage__property
             %dt Route
             %dd
-              - if @message.route
+              - if @message.reply_bridge?
+                Reply Bridge
+              - elsif @message.route
                 = link_to @message.route.name, [:edit, organization, @server, @message.route], :class => "u-link"
               - else
                 Unknown Route
@@ -41,6 +43,13 @@
                 = link_to @message.domain.name, [organization, @server, :domains], :class => "u-link"
               - else
                 Unknown Domain
+          - if @message.reply_bridge?
+            %dl.messagePropertiesPage__property
+              %dt Reply Bridge Destination
+              %dd= @message.reply_bridge_alias&.email || "Unknown destination"
+            %dl.messagePropertiesPage__property
+              %dt Reply Bridge Alias
+              %dd= @message.reply_bridge_alias&.address || @message.rcpt_to || "Unknown alias"
         - else
           %dl.messagePropertiesPage__property
             %dt Credential
@@ -73,4 +82,3 @@
 
     .messagePropertiesPage__right
       = render 'deliveries', :message => @message
-

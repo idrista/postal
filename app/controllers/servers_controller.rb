@@ -43,6 +43,7 @@ class ServersController < ApplicationController
 
   def update
     extra_params = [:spam_threshold, :spam_failure_threshold, :postmaster_address]
+    normalize_reply_bridge_params
 
     if current_user.admin?
       extra_params += [
@@ -136,6 +137,19 @@ class ServersController < ApplicationController
 
   def safe_params(*extras)
     params.require(:server).permit(:name, :mode, :ip_pool_id, :reply_bridge_mode, :reply_bridge_domain, :reply_bridge_sender, :reply_bridge_alias_ttl_days, *extras)
+  end
+
+  def normalize_reply_bridge_params
+    return unless params[:server].is_a?(ActionController::Parameters) || params[:server].is_a?(Hash)
+    return unless params[:server].key?(:reply_bridge_sender_local_part) || params[:server].key?(:reply_bridge_sender_domain)
+
+    local_part = params[:server].delete(:reply_bridge_sender_local_part).to_s.strip
+    domain = params[:server].delete(:reply_bridge_sender_domain).to_s.strip
+    params[:server][:reply_bridge_sender] = if local_part.present? && domain.present?
+                                              "#{local_part}@#{domain}"
+                                            else
+                                              nil
+                                            end
   end
 
 end
